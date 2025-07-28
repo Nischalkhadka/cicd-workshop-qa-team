@@ -51,7 +51,7 @@ jobs:
         # Replace 'your-app-build-path' with the actual path inside your Docker image
         run: |
           docker create --name frontend-extract $ECR_REGISTRY/$ECR_REPOSITORY:latest
-          docker cp frontend-extract:/your-app-build-path ./extracted-build
+          docker cp frontend-extract:/app/build ./extracted-build
           docker rm frontend-extract
         # Example for a React app built with create-react-app:
         # docker cp frontend-extract:/app/build ./extracted-build
