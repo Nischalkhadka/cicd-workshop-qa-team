@@ -1,41 +1,69 @@
-name: Deploy Frontend to S3 + CloudFront
+name: Deploy Frontend to S3 and CloudFront with Docker
 
 on:
   push:
     branches:
-      - team3-nischal
+        - team3-nischal
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+  S3_BUCKET: ${{ secrets.S3_BUCKET }}
+  CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
-steps:
-      - name: Checkout code
+    steps:
+      - name: 1. Checkout code
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
+      - name: 2. Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ env.AWS_REGION }}
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: 20
+      - name: 3. Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Install dependencies and build
+      - name: 4. Build Docker image and 5. Tag and Push Docker image to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }} # Use commit SHA as image tag
         run: |
-          npm install
-          npm run build
+          # Build the Docker image
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          # Tag the image with 'latest' as well
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          # Push the images to ECR
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
-      - name: Sync files to S3
+      - name: 6. Extract static files from Docker image
+        # This step assumes your Dockerfile builds your frontend and places
+        # the static assets in a known directory (e.g., /app/build or /usr/share/nginx/html)
+        # Replace 'your-app-build-path' with the actual path inside your Docker image
         run: |
-          aws s3 sync ./build s3://${{ secrets.S3_BUCKET }} --delete
+          docker create --name frontend-extract $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker cp frontend-extract:/your-app-build-path ./extracted-build
+          docker rm frontend-extract
+        # Example for a React app built with create-react-app:
+        # docker cp frontend-extract:/app/build ./extracted-build
+        # Example for an Nginx served app where files are in /usr/share/nginx/html:
+        # docker cp frontend-extract:/usr/share/nginx/html ./extracted-build
 
-      - name: Invalidate CloudFront cache
+      - name: 7. Deploy static files to S3
+        run: |
+          aws s3 sync ./extracted-build s3://${{ env.S3_BUCKET }} --delete
+        # The --delete flag ensures that files removed from your build are also removed from S3.
+        # Be careful with --delete if your S3 bucket contains other assets not managed by this workflow.
+
+      - name: 8. Invalidate CloudFront cache
         run: |
           aws cloudfront create-invalidation \
-            --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
-            --paths "/*"
+            --distribution-id ${{ env.CLOUDFRONT_DISTRIBUTION_ID }} \
+            --paths "/*" # Invalidate all paths to ensure all content is fresh
