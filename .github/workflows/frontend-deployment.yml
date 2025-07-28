@@ -33,13 +33,7 @@ jobs:
       - name: 4. Set ECR_REGISTRY environment variable
         run: echo "ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}" >> $GITHUB_ENV
 
-      - name: 5. Deploy static files to S3
-        run: |
-          aws s3 sync ./extracted-build s3://${{ env.S3_BUCKET }} --delete
-        # The --delete flag ensures that files removed from your build are also removed from S3.
-        # Be careful with --delete if your S3 bucket contains other assets not managed by this workflow.
-
-      - name: 6. Invalidate CloudFront cache
+      - name: 5. Invalidate CloudFront cache
         run: |
           aws cloudfront create-invalidation \
             --distribution-id ${{ env.CLOUDFRONT_DISTRIBUTION_ID }} \
