@@ -5,36 +5,64 @@ on:
     branches:
         - team3-nischal
 
-env:
-  AWS_REGION: ${{ secrets.AWS_REGION }}
-  ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
-  S3_BUCKET: ${{ secrets.S3_BUCKET }}
-  CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
-
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: 1. Checkout code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: 2. Configure AWS credentials
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+
+      # This action uploads the build output so the 'deploy' job can use it.
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          # IMPORTANT: Change 'dist' to whatever your build process generates (e.g., 'build', 'out').
+          path: ./dist
+  deploy:
+    # This job will only run after the 'build' job has completed successfully.
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: build-output
+          path: ./dist
 
-      - name: 3. Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
+      # Deploy to S3
+      # This command syncs the contents of the build directory to your S3 bucket.
+      # The '--delete' flag removes files from the bucket that are no longer in the build output.
+      - name: Sync files to S3
+        run: |
+          aws s3 sync ./dist s3://${{ secrets.AWS_S3_BUCKET }} --delete
+        env:
+          # The name of your S3 bucket. Store it as a secret.
+          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
 
-      - name: 4. Set ECR_REGISTRY environment variable
-        run: echo "ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}" >> $GITHUB_ENV
-
+      # This command clears the CloudFront cache, ensuring users see the latest version of our site.
       - name: 5. Invalidate CloudFront cache
         run: |
           aws cloudfront create-invalidation \
             --distribution-id ${{ env.CLOUDFRONT_DISTRIBUTION_ID }} \
-            --paths "/*" # Invalidate all paths to ensure all content is fresh
+            --paths "/*" 
+        env:
+          AWS_CLOUDFRONT_ID: ${{ secrets.AWS_CLOUDFRONT_ID }}
