@@ -1,4 +1,4 @@
-import React from 'react';
+import { act } from 'react';
 
 const UserList = ({ users, onUserDeleted }) => {
   const handleDelete = (user) => {
