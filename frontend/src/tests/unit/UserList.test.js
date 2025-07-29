@@ -1,4 +1,4 @@
-import React from 'react';
+import {act} from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import UserList from '../../components/UserList';
