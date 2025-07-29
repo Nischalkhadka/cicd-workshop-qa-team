@@ -1,67 +1,36 @@
-name: Deploy Frontend to S3 and CloudFront with Docker
-
+name: Frontend Deployment
 on:
   push:
     branches:
-        - team3-nischal
-
+      - team3-nischal
 jobs:
-  build:
+  deploy:
+    name: Deploy Frontend to S3 + CloudFront
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout repo
         uses: actions/checkout@v4
-
-      - name: Set up Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-
       - name: Install dependencies
-        run: npm ci
-
-      - name: Build application
+        working-directory: frontend
+        run: npm install
+      - name: Build frontend
+        working-directory: frontend
         run: npm run build
-
-      # This action uploads the build output so the 'deploy' job can use it.
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-output
-          # IMPORTANT: Change 'dist' to whatever your build process generates (e.g., 'build', 'out').
-          path: ./dist
-  deploy:
-    # This job will only run after the 'build' job has completed successfully.
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: build-output
-          path: ./dist
-
-      # Deploy to S3
-      # This command syncs the contents of the build directory to your S3 bucket.
-      # The '--delete' flag removes files from the bucket that are no longer in the build output.
-      - name: Sync files to S3
+          aws-region: ${{ secrets.AWS_REGION }}
+      - name: Deploy to S3
         run: |
-          aws s3 sync ./dist s3://${{ secrets.AWS_S3_BUCKET }} --delete
-        env:
-          # The name of your S3 bucket. Store it as a secret.
-          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
-
-      # This command clears the CloudFront cache, ensuring users see the latest version of our site.
-      - name: 5. Invalidate CloudFront cache
+          aws s3 sync frontend/build/ s3://${{ secrets.S3_BUCKET_NAME }} --delete
+      - name: Invalidate CloudFront cache
         run: |
           aws cloudfront create-invalidation \
-            --distribution-id ${{ env.CLOUDFRONT_DISTRIBUTION_ID }} \
-            --paths "/*" 
-        env:
-          AWS_CLOUDFRONT_ID: ${{ secrets.AWS_CLOUDFRONT_ID }}
+            --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
+            --paths "/*"
