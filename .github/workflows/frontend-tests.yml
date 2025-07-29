@@ -11,18 +11,22 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+     
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache-dependency-path: ./frontend/package-lock.json
           cache: 'npm'
+     
       - name: Install dependencies
         working-directory: ./frontend
         run: npm install
+     
       - name: Run unit tests
         working-directory: ./frontend
         run: npm run test:unit
+      
       - name: Run end-to-end tests
         working-directory: ./frontend
         run: npm run test:integration
