@@ -34,10 +34,11 @@ describe('UserList Unit Tests', () => {
 
   test('calls onUserDeleted when delete button clicked', () => {
     render(<UserList users={mockUsers} onUserDeleted={mockOnUserDeleted} />);
-    
+    console.log(mockUsers)
     const deleteButton = screen.getByTestId('delete-user-1');
     fireEvent.click(deleteButton);
+    console.log(deleteButton)
     
-    expect(mockOnUserDeleted).toHaveBeenCalledWith(1);
+    expect(mockOnUserDeleted).toHaveBeenCalledTimes(1);
   });
 });

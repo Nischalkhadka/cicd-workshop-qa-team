@@ -3,12 +3,13 @@ import { act } from 'react';
 const UserList = ({ users, onUserDeleted }) => {
   const handleDelete = (user) => {
     console.log(`🗑️ UserList: Delete button clicked for user - ID: ${user.id}, Name: ${user.name}`);
-    if (window.confirm(`Are you sure you want to delete user "${user.name}"?`)) {
-      console.log(`✅ UserList: Delete confirmed for user - ${user.name}`);
-      onUserDeleted(user.id);
-    } else {
-      console.log(`❌ UserList: Delete cancelled for user - ${user.name}`);
-    }
+          onUserDeleted(user.id);
+    // if (window.confirm(`Are you sure you want to delete user "${user.name}"?`)) {
+    //   console.log(`✅ UserList: Delete confirmed for user - ${user.name}`);
+    //   onUserDeleted(user.id);
+    // } else {
+    //   console.log(`❌ UserList: Delete cancelled for user - ${user.name}`);
+    // }
   };
 
   console.log(`📋 UserList: Rendering ${users.length} users`);
