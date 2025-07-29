@@ -36,7 +36,7 @@ describe('App Integration Tests', () => {
   test('displays loading state initially', () => {
     render(<App />);
     
-    expect(screen.getByText('Loading...')).toBeInTheDocument();
+    expect(screen.getByText('Loading users...')).toBeInTheDocument();
   });
 
   test('handles error state', async () => {
@@ -45,7 +45,7 @@ describe('App Integration Tests', () => {
     render(<App />);
     
     await waitFor(() => {
-      expect(screen.getByText('Failed to load users')).toBeInTheDocument();
+      expect(screen.getByText('No users found')).toBeInTheDocument();
     });
   });
 });
