@@ -13,6 +13,10 @@ describe('UserList Unit Tests', () => {
     mockOnUserDeleted.mockClear();
   });
 
+  beforeAll(() => {
+  window.confirm = jest.fn(() => true); // Always confirm deletion
+});
+
   test('renders users list', () => {
     render(<UserList users={mockUsers} onUserDeleted={mockOnUserDeleted} />);
     
