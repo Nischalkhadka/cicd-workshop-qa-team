@@ -1,8 +1,7 @@
 name: Frontend Deployment
 on:
   push:
-    branches:
-      - team3-nischal
+    branches: [ team3-nischal ]
 jobs:
   deploy:
     name: Deploy Frontend to S3 + CloudFront
