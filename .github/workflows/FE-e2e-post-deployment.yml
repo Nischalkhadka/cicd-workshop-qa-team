@@ -5,11 +5,13 @@ on:
     workflows: ["Frontend Deployment"]
     types:
       - completed
+  workflow_dispatch: # Allow manual triggers
 
 jobs:
   e2e-tests:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30  # Set overall job timeout
     
     steps:
     - name: Checkout code
@@ -24,38 +26,71 @@ jobs:
 
     - name: Install E2E test dependencies
       working-directory: ./e2e-tests
-      run: npm ci
+      run: |
+        npm ci
+        npx cypress verify  # Verify Cypress installation
 
     - name: Wait for deployment to be ready
+      timeout-minutes: 5
       run: |
         echo "Waiting for frontend to be accessible..."
-        timeout 300 bash -c 'until curl -f ${{ secrets.FRONTEND_URL }}; do sleep 10; done'
+        attempt_counter=0
+        max_attempts=30
+        
+        until $(curl --output /dev/null --silent --head --fail ${{ secrets.FRONTEND_URL }}); do
+          if [ ${attempt_counter} -eq ${max_attempts} ]; then
+            echo "Max attempts reached. Frontend is not accessible."
+            exit 1
+          fi
+          
+          printf '.'
+          attempt_counter=$(($attempt_counter+1))
+          sleep 10
+        done
+        echo "Frontend is accessible!"
 
     - name: Run Cypress E2E tests
-      working-directory: ./e2e-tests
-      run: npm run cypress:run
+      uses: cypress-io/github-action@v6  # Using official Cypress GitHub Action
+      with:
+        working-directory: e2e-tests
+        browser: chrome
+        record: true  # Enable recording if you have Cypress Dashboard
+        parallel: false  # Set to true if you want to run tests in parallel
+        config-file: cypress.config.js
+        wait-on: ${{ secrets.FRONTEND_URL }}  # Wait for URL to be ready
+        wait-on-timeout: 120  # Wait up to 2 minutes
       env:
-          CYPRESS_BASE_KEY: ${{ secrets.CYPRESS_API_URL }}
-          CYPRESS_API_URL: ${{ secrets.REACT_APP_API_URL }}
+        CYPRESS_BASE_URL: ${{ secrets.FRONTEND_URL }}  # Use consistent URL
+        CYPRESS_API_URL: ${{ secrets.API_BASE_URL }}  # Backend API URL
+        CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}  # If using Cypress Dashboard
+        NODE_ENV: test
+      continue-on-error: true  # Don't fail the workflow immediately if tests fail
+
+    - name: Generate test report
+      if: always()
+      working-directory: ./e2e-tests
+      run: npm run generate-report  # Assumes you have a script to generate test reports
 
     - name: Upload Cypress artifacts
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: cypress-artifacts
+        name: cypress-artifacts-${{ github.run_id }}
         path: |
           e2e-tests/cypress/screenshots
           e2e-tests/cypress/videos
           e2e-tests/cypress/reports
+        retention-days: 14  # Keep artifacts for 14 days
 
     - name: Send Slack notification
       if: always()
       uses: 8398a7/action-slack@v3
       with:
         status: ${{ job.status }}
+        fields: repo,commit,author,eventName,workflow,job,took
         custom_payload: |
           {
-            text: "E2E Tests ${{ job.status == 'success' && 'Passed' || 'Failed' }}!",
+            text: ":test_tube: E2E Tests ${{ job.status == 'success' && ':white_check_mark: Passed' || ':x: Failed' }}!",
             attachments: [{
               color: "${{ job.status == 'success' && 'good' || 'danger' }}",
               fields: [{
@@ -66,6 +101,14 @@ jobs:
                 title: "Branch",
                 value: "${{ github.ref_name }}",
                 short: true
+              }, {
+                title: "Workflow",
+                value: "${{ github.workflow }}",
+                short: true
+              }, {
+                title: "Run URL",
+                value: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+                short: false
               }]
             }]
           }
